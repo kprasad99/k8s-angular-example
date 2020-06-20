@@ -1,0 +1,81 @@
+= Angular in Kubernetes Environment
+
+An Example Project for Angular in Kubernetes Environment
+
+== Features
+
+- A light weight App server using `golang's` `http` module. Thus image size is 14M
+- Two apps to demo path based routing.
+- The project is added to validate cluster bring up steps described at https://github.com/kprasad99/documents/blob/master/src/asciidoc/install_kubernetes_on_ubuntu.20.04.adoc[here]
+
+== Build and deploy
+
+- change directory to `app1` and build the first angular app.
++
+----
+$ ng build --prod --base-href /app1/ --deploy-url /app1/
+----
+- Build docker image.
++
+----
+$ docker build . -t kprasad99/k8s-app1-ui --no-cache
+----
+- change directory to `app2` and build the first angular app.
++
+----
+$ ng build --prod --base-href /app2/ --deploy-url /app2/
+----
+- Build docker image.
++
+----
+$ docker build . -t kprasad99/k8s-app2-ui --no-cache
+----
+
+[NOTE]
+====
+If the docker image is built on different machine than worker node and there is no docker hub account execute
+below command to copy the image.
+- Save the docker image
++
+----
+$ docker save kprasad99/k8s-app2-ui -o app2.tar
+$ docker save kprasad99/k8s-app1-ui -o app1.tar
+----
+- Copy the tar to worker node and load it.
++
+----
+$ docker load -i app2.tar
+$ docker load -i app1.tar
+----
+====
+
+- Now change the directory to `charts/app1` and execute helm install to deploy first application.
++
+----
+helm install kp-app1 .
+----
+- Now change the directory to `app2/charts/app2` and execute helm install to deploy second application.
++
+----
+helm install kp-app2 .
+----
+
+- Get the traefik `http` node port and access the application using the node port.
++
+----
+$ kubectl get svc -n kube-system
+----
+.output
+----
+NAME                   TYPE           CLUSTER-IP      EXTERNAL-IP      PORT(S)                      AGE
+kube-dns               ClusterIP      10.96.0.10      <none>           53/UDP,53/TCP,9153/TCP       12h
+kubernetes-dashboard   NodePort       10.106.170.36   <none>           443:32570/TCP                12h
+metrics-server         ClusterIP      10.100.222.78   <none>           443/TCP                      11h
+traefik                LoadBalancer   10.106.37.166   192.168.56.240   80:32485/TCP,443:30413/TCP   11h
+----
+NOTE: In my case node port is 32485.
+
+- Now you can access the application using the url `http://<master-ip>:32485/app1/` and `http://<master-ip>:32485/app2/`
+
+- If you've installed metallb you can directly access the application, in my case from above `external-ip` field, I can access app1 using
+url `http://192.168.56.240/app1/`
