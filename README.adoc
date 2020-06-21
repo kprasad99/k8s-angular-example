@@ -1,3 +1,11 @@
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
 = Angular in Kubernetes Environment
 
 An Example Project for Angular in Kubernetes Environment
@@ -12,21 +20,25 @@ An Example Project for Angular in Kubernetes Environment
 
 - change directory to `app1` and build the first angular app.
 +
+[source,bash]
 ----
 $ ng build --prod --base-href /app1/ --deploy-url /app1/
 ----
 - Build docker image.
 +
+[source,bash]
 ----
 $ docker build . -t kprasad99/k8s-app1-ui --no-cache
 ----
 - change directory to `app2` and build the first angular app.
 +
+[source,bash]
 ----
 $ ng build --prod --base-href /app2/ --deploy-url /app2/
 ----
 - Build docker image.
 +
+[source,bash]
 ----
 $ docker build . -t kprasad99/k8s-app2-ui --no-cache
 ----
@@ -37,12 +49,14 @@ If the docker image is built on different machine than worker node and there is 
 below command to copy the image.
 - Save the docker image
 +
+[source,bash]
 ----
 $ docker save kprasad99/k8s-app2-ui -o app2.tar
 $ docker save kprasad99/k8s-app1-ui -o app1.tar
 ----
 - Copy the tar to worker node and load it.
 +
+[source,bash]
 ----
 $ docker load -i app2.tar
 $ docker load -i app1.tar
@@ -51,21 +65,25 @@ $ docker load -i app1.tar
 
 - Now change the directory to `charts/app1` and execute helm install to deploy first application.
 +
+[source,bash]
 ----
 helm install kp-app1 .
 ----
 - Now change the directory to `app2/charts/app2` and execute helm install to deploy second application.
 +
+[source,bash]
 ----
 helm install kp-app2 .
 ----
 
 - Get the traefik `http` node port and access the application using the node port.
 +
+[source,bash]
 ----
 $ kubectl get svc -n kube-system
 ----
 .output
+[source,bash]
 ----
 NAME                   TYPE           CLUSTER-IP      EXTERNAL-IP      PORT(S)                      AGE
 kube-dns               ClusterIP      10.96.0.10      <none>           53/UDP,53/TCP,9153/TCP       12h
@@ -79,3 +97,73 @@ NOTE: In my case node port is 32485.
 
 - If you've installed metallb you can directly access the application, in my case from above `external-ip` field, I can access app1 using
 url `http://192.168.56.240/app1/`
+
+== Alternative approach.
+
+=== Host based routing approach.
+
+Instead of path based routing, if we need host based routing. and we don't have DNS server, we can follow below approach.
+
+NOTE: For simplicty not rebuilding above apps, hence `path` shall remain same.
+
+. Modify values.yaml to use FQDN.
+.. In `app1` replace `*` with FQDN.
++
+[source,yaml]
+----
+  hosts:
+    - host: "app1.kp-app.com"
+      paths:
+      - "/app1/"
+----
+.. In `app2` replace `*` with FQDN.
++
+[source,yaml]
+----
+  hosts:
+    - host: "app2.kp-app.com"
+      paths:
+      - "/app2/"
+----
+
+. modify `templates/ingress.yaml` to include host routing(which I had commented out for previous example) in both charts
++
+[source,yaml]
+----
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ . }}
+            backend:
+              serviceName: {{ $fullName }}
+              servicePort: {{ $svcPort }}
+          {{- end }}
+    {{- end }}
+  {{- end }}
+----
+
+. deploy the application.
++
+[source,bash]
+----
+$ helm upgrade kp-app1 .
+$ helm upgrade kp-app2 .
+----
+
+. Now go to the `hosts` file from where you want launch the `browser`(in my case(`ubuntu`) its at /`etc/hosts`), update the DNS, as shown below.
++
+[source,config]
+----
+192.168.56.240 kp-app.com app2.kp-app.com app1.kp-app.com
+----
++
+NOTE: IP `192.168.56.240` is my `metallb` ip assigned to traefik loadbalancer.
+
+. Now go to browser and launch `http://app1.kp-app.com/app1/` and `http://app2.kp-app.com/app2/`
+
+==  Without using ingress.
+
+Instead of using ingress you can directly create service type as `Loadbalancer` instead of `ClusterIP` so that `metallb` can assign different `External IP`s to both the apps, which we can use it to access the apps directly.
