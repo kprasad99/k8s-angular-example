@@ -164,6 +164,6 @@ NOTE: IP `192.168.56.240` is my `metallb` ip assigned to traefik loadbalancer.
 
 . Now go to browser and launch `http://app1.kp-app.com/app1/` and `http://app2.kp-app.com/app2/`
 
-==  Without using ingress.
+===  Without using ingress.
 
 Instead of using ingress you can directly create service type as `Loadbalancer` instead of `ClusterIP` so that `metallb` can assign different `External IP`s to both the apps, which we can use it to access the apps directly.
